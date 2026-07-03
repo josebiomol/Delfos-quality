@@ -1,0 +1,427 @@
+# 📋 README - SISTEMA COMPLETO DE FORMULÁRIOS & CRUD
+## Agenda de Congelação - Arquitetura e Fluxo de Dados
+
+**Data:** Junho 2026  
+**Versão:** 2.0 Forms & CRUD Integrado  
+**Status:** ✅ Pronto para Produção
+
+---
+
+## 📁 ESTRUTURA DE ARQUIVOS
+
+Este sistema utiliza **2 arquivos principais** em pastas diferentes:
+
+### **1. `js/main.js` - Orquestrador Central**
+**Localização:** `js/main.js`  
+**Responsabilidade:** Gerencia toda a lógica de callbacks e fluxo de dados  
+**Tamanho:** ~450 linhas
+
+**Exports:**
+- `appointmentCallbacks` - Callbacks para agendamentos (novo, editar, deletar, salvar)
+- `blockedCallbacks` - Callbacks para bloqueios (novo, editar, deletar, salvar)
+- `renderShell(page)` - Renderiza shell completo com todos os callbacks
+- `renderLogin()`, `renderSignup()`, `renderChangeUnit()` - Telas de autenticação
+
+### **2. `js/services/uiService.js` - Renderizador de Páginas**
+**Localização:** `js/services/uiService.js`  
+**Responsabilidade:** Renderiza componentes e passa callbacks corretos  
+**Tamanho:** ~280 linhas
+
+**Exports:**
+- `UIService.renderShell(page, state, callbacks)` - Renderiza shell com navbar
+- `UIService.renderPage(page, state, callbacks)` - Renderiza página específica
+
+---
+
+## 🔄 FLUXO DE DADOS COMPLETO
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    main.js                                   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ const appointmentCallbacks = {                        │  │
+│  │   onNewAppointment()    ← Clica "Novo"              │  │
+│  │   onEditAppointment()   ← Clica "Editar"            │  │
+│  │   onDeleteAppointment() ← Clica "Deletar"           │  │
+│  │   onSaveAppointment()   ← Clica "Salvar"            │  │
+│  │   onCloseForm()         ← Clica "Cancelar"          │  │
+│  │ }                                                     │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                            │                                  │
+│                            ↓                                  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ renderShell(page)                                     │  │
+│  │   UIService.renderShell(page, state, callbacks)      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 uiService.js                                 │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ UIService.renderShell(page, state, callbacks)         │  │
+│  │   1. Renderiza shell HTML (header + sidebar + main)  │  │
+│  │   2. Chama renderPage(page, state, callbacks)         │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                            │                                  │
+│                            ↓                                  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ UIService.renderPage(page, state, callbacks)          │  │
+│  │   - dashboard    → DashboardUI.render() + bind()      │  │
+│  │   - appointments → AppointmentsUI.render() + bind()   │  │ ← CHAVE!
+│  │   - blocked      → BlockedUI.render() + bind()        │  │ ← CHAVE!
+│  │   - new/edit     → FormUI.render() + bind()           │  │
+│  │   - settings     → SettingsUI.render() + bind()       │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎯 CALLBACKS - O CORAÇÃO DO SISTEMA
+
+### **appointmentCallbacks Object (main.js)**
+
+```javascript
+const appointmentCallbacks = {
+  // 1️⃣ NOVO AGENDAMENTO
+  onNewAppointment: () => {
+    // Renderiza FormUI vazio
+    const html = FormUI.render(state, null);
+    document.getElementById('view').innerHTML = html;
+    
+    // Bind form com callbacks de save/cancel
+    FormUI.bind(state, {
+      onSaveAppointment: appointmentCallbacks.onSaveAppointment,
+      onCloseForm: appointmentCallbacks.onCloseForm
+    });
+  },
+
+  // 2️⃣ EDITAR AGENDAMENTO
+  onEditAppointment: (id) => {
+    // Encontra agendamento no state
+    const apt = state.appointments.find(a => a.agendamento_id === id);
+    
+    // Renderiza FormUI com dados preenchidos
+    const html = FormUI.render(state, apt);
+    document.getElementById('view').innerHTML = html;
+    
+    // Bind form (detecta se é edit pela presença de agendamento_id)
+    FormUI.bind(state, {
+      onSaveAppointment: appointmentCallbacks.onSaveAppointment,
+      onCloseForm: appointmentCallbacks.onCloseForm
+    });
+  },
+
+  // 3️⃣ SALVAR AGENDAMENTO (NOVO OU EDITAR)
+  onSaveAppointment: async (data) => {
+    try {
+      if (data.agendamento_id) {
+        // UPDATE: AppointmentService detecta que é edição
+        await AppointmentService.updateAppointment(data.agendamento_id, data, state);
+      } else {
+        // INSERT: AppointmentService detecta que é novo
+        await AppointmentService.saveAppointment(data, state);
+      }
+
+      // Recarrega dados do servidor
+      await DataService.loadAll();
+      
+      // Fecha form
+      FormUI.closeForm();
+      
+      // Re-renderiza tabela
+      renderShell('appointments');
+    } catch (error) {
+      showToast(`❌ Erro ao salvar: ${error.message}`, 'error');
+    }
+  },
+
+  // 4️⃣ DELETAR AGENDAMENTO
+  onDeleteAppointment: async (id) => {
+    try {
+      await AppointmentService.deleteAppointment(id, state);
+      await DataService.loadAll();
+      renderShell('appointments');
+    } catch (error) {
+      showToast(`❌ Erro ao deletar: ${error.message}`, 'error');
+    }
+  },
+
+  // 5️⃣ FECHAR FORMULÁRIO
+  onCloseForm: () => {
+    FormUI.closeForm();
+    renderShell('appointments');
+  }
+};
+```
+
+### **blockedCallbacks Object (main.js)**
+
+Segue a mesma estrutura de `appointmentCallbacks`, mas:
+- Usa `BlockedFormUI` em vez de `FormUI`
+- Usa `BlockedDateService` em vez de `AppointmentService`
+- Callbacks internos: `onSave` e `onCancel` (não `onSaveAppointment`)
+
+---
+
+## 📊 EXEMPLO PRÁTICO: FLUXO COMPLETO
+
+### **Usuário clica "Novo Agendamento"**
+
+```
+1. AppointmentsUI.bind(state, appointmentCallbacks) é chamado
+   ↓
+2. Botão "Novo" dispara: appointmentCallbacks.onNewAppointment()
+   ↓
+3. FormUI.render(state, null) gera HTML do formulário vazio
+   ↓
+4. FormUI.bind(state, callbacks) configura eventos do form:
+   - Clique em "Salvar" → appointmentCallbacks.onSaveAppointment(data)
+   - Clique em "Cancelar" → appointmentCallbacks.onCloseForm()
+   ↓
+5. Usuário preenche formulário e clica "Salvar"
+   ↓
+6. appointmentCallbacks.onSaveAppointment(data) é disparado:
+   - AppointmentService.saveAppointment(data, state) chamado
+   - API fetch enviado para Google Apps Script
+   - Resposta recebida com sucesso
+   ↓
+7. DataService.loadAll() atualiza state com novo agendamento
+   ↓
+8. FormUI.closeForm() remove o overlay
+   ↓
+9. renderShell('appointments') re-renderiza:
+   - UIService.renderShell() gera shell completo
+   - UIService.renderPage('appointments', state, appointmentCallbacks)
+   - AppointmentsUI.render(state) gera tabela com novo item
+   - AppointmentsUI.bind(state, appointmentCallbacks) re-configura eventos
+   ↓
+10. Toast exibe: "✅ Agendamento salvo com sucesso!"
+```
+
+---
+
+## 🔗 INTEGRAÇÃO DE ARQUIVOS
+
+### **Como main.js e uiService.js trabalham juntos**
+
+```javascript
+// Em main.js:
+function renderShell(page) {
+  UIService.renderShell(page, state, {
+    onNavigate: (page) => renderShell(page),
+    appointments: appointmentCallbacks,  // ← PASSA CALLBACKS
+    blocked: blockedCallbacks,           // ← PASSA CALLBACKS
+    // ... outros callbacks
+  });
+}
+
+// Em uiService.js:
+static renderShell(page, state, callbacks) {
+  // ... renderiza shell HTML
+  this.renderPage(page, state, callbacks);
+}
+
+static renderPage(page, state, callbacks) {
+  case APP_CONFIG.ROUTES.appointments:
+    html = AppointmentsUI.render(state);
+    viewEl.innerHTML = html;
+    AppointmentsUI.bind(state, callbacks.appointments); // ← USA CALLBACKS
+    break;
+}
+```
+
+---
+
+## 📂 DEPENDÊNCIAS DE CADA ARQUIVO
+
+### **main.js depende de:**
+- `js/services/dataService.js` - Estado global
+- `js/services/apiService.js` - Chamadas API
+- `js/services/uiService.js` - Renderização
+- `js/modules/scheduling/ui/forms.js` - Formulário
+- `js/modules/scheduling/ui/blockedForm.js` - Formulário bloqueio
+- `js/modules/scheduling/services/appointmentService.js` - Lógica
+- `js/modules/scheduling/services/blockedDateService.js` - Lógica
+- `js/layout/toast.js` - Notificações
+- `js/core/constants.js` - Configurações
+
+### **uiService.js depende de:**
+- `js/modules/scheduling/ui/dashboard.js` - Dashboard
+- `js/modules/scheduling/ui/appointments.js` - Tabela
+- `js/modules/scheduling/ui/blocked.js` - Tabela
+- `js/modules/scheduling/ui/forms.js` - Formulário
+- `js/modules/settings/ui/settings.js` - Settings
+- `js/modules/scheduling/services/chartsService.js` - Gráficos
+- `js/core/fontAwesomeIcons.js` - Ícones
+- `js/core/constants.js` - Rotas
+
+---
+
+## 🎨 COMPONENTES ENVOLVIDOS
+
+```
+main.js (Orquestração)
+    │
+    ├─→ AppointmentsUI (Renderiza tabela)
+    │      │
+    │      └─→ AppointmentsUI.bind() (Configura cliques)
+    │            └─→ appointmentCallbacks.onNewAppointment()
+    │                 │
+    │                 └─→ FormUI.render() (Renderiza form)
+    │                      └─→ FormUI.bind() (Configura form)
+    │                           └─→ appointmentCallbacks.onSaveAppointment()
+    │                                │
+    │                                └─→ AppointmentService.saveAppointment()
+    │                                     └─→ API
+    │
+    └─→ UIService.renderShell() (Em uiService.js)
+         │
+         └─→ UIService.renderPage() (Em uiService.js)
+              └─→ AppointmentsUI.bind(state, appointmentCallbacks)
+```
+
+---
+
+## 🚀 FLUXO DE INICIALIZAÇÃO
+
+```
+1. DOMContentLoaded
+   └─→ init()
+       ├─→ getSession() (verifica login)
+       ├─→ getUnit() (verifica unidade selecionada)
+       ├─→ DataService.loadAll() (carrega dados)
+       └─→ renderShell('dashboard')
+           └─→ UIService.renderShell('dashboard', state, callbacks)
+               └─→ UIService.renderPage('dashboard', state, callbacks)
+                   └─→ ChartsService.init(state) (renderiza gráficos)
+```
+
+---
+
+## 💾 SERVICES - RESPONSABILIDADES
+
+### **AppointmentService** (js/modules/scheduling/services/appointmentService.js)
+- `saveAppointment(data, state)` - INSERT novo
+- `updateAppointment(id, data, state)` - UPDATE existente
+- `deleteAppointment(id, state)` - DELETE
+
+### **BlockedDateService** (js/modules/scheduling/services/blockedDateService.js)
+- `saveBlockedDate(data, state)` - INSERT novo
+- `updateBlockedDate(id, data, state)` - UPDATE existente
+- `deleteBlockedDate(id, state)` - DELETE
+
+### **DataService** (js/services/dataService.js)
+- `loadAll()` - Carrega appointments, blocked, lookups do servidor
+
+---
+
+## 🧪 COMO TESTAR
+
+### **Test 1: Novo Agendamento**
+```
+1. Abra F12 (Console)
+2. Vá para "Agendamentos"
+3. Clique "Novo agendamento"
+4. No console, procure por: 🆕 NOVO AGENDAMENTO
+5. Preencha o formulário
+6. Clique "Salvar"
+7. No console, procure por: 💾 SALVAR AGENDAMENTO
+8. Procure por: ✅ SAVE OK ou ❌ SAVE ERROR
+```
+
+### **Test 2: Editar Agendamento**
+```
+1. Na tabela de agendamentos, clique botão ✏️
+2. No console, procure por: ✏️ EDITAR AGENDAMENTO
+3. Modifique um campo
+4. Clique "Salvar"
+5. No console, procure por: 🔄 UPDATE mode
+6. Procure por: ✅ UPDATE OK
+```
+
+### **Test 3: Deletar Agendamento**
+```
+1. Na tabela, clique botão 🗑️
+2. Confirme na dialog
+3. No console, procure por: 🗑 DELETAR AGENDAMENTO
+4. Procure por: ✅ DELETE OK
+```
+
+---
+
+## 🐛 DEBUGGING TIPS
+
+### **Console Logs Coloridos**
+Todos os eventos disparam logs coloridos para facilitar debug:
+
+```javascript
+console.log('%c🆕 NOVO AGENDAMENTO', 'color: green; font-weight: bold;');
+console.log('%c✏️ EDITAR AGENDAMENTO', 'color: orange; font-weight: bold;');
+console.log('%c💾 SALVAR AGENDAMENTO', 'color: blue; font-weight: bold;');
+console.log('%c🗑 DELETAR AGENDAMENTO', 'color: red; font-weight: bold;');
+```
+
+### **Global Debug Object**
+```javascript
+// No browser console:
+window.DEBUG_STATE  // Acessa estado global
+```
+
+### **Erros Comuns**
+
+| Erro | Causa | Solução |
+|------|-------|---------|
+| "onSaveAppointment não definido" | Callback não passado | Verificar `appointmentCallbacks` em main.js |
+| "FormUI.render() não foi chamado" | Bind sem render | Sempre chamar `render()` antes de `bind()` |
+| "Modal não fecha" | FormUI.closeForm() não chamado | Verificar callback `onCloseForm()` |
+| Dados não salvam | AppointmentService erro | Verificar console para logs de erro |
+
+---
+
+## 📝 CHECKLIST DE IMPLEMENTAÇÃO
+
+- [x] Copiar `main-FINAL-INTEGRADO.js` → `js/main.js`
+- [x] Copiar `uiService-FINAL-INTEGRADO.js` → `js/services/uiService.js`
+- [x] Verificar imports em ambos os arquivos
+- [x] Verificar AppointmentService existe em `js/modules/scheduling/services/`
+- [x] Verificar BlockedDateService existe em `js/modules/scheduling/services/`
+- [x] Verificar funções no Codigo.gs (Google Apps Script)
+- [x] Hard refresh (Ctrl+Shift+R)
+- [x] Testar novo agendamento
+- [x] Testar editar agendamento
+- [x] Testar deletar agendamento
+- [x] Testar novo bloqueio
+- [x] Testar editar bloqueio
+- [x] Testar deletar bloqueio
+- [x] Git commit e push
+
+---
+
+## 📚 PRÓXIMOS PASSOS
+
+1. **Implementar busca/filtro** em GenericListUI
+2. **Adicionar paginação** nas tabelas
+3. **Validações server-side** mais robustas no Codigo.gs
+4. **Exportar para Excel/PDF**
+5. **Dashboard com analytics**
+6. **Notificações em tempo real** (WebSocket)
+
+---
+
+## 📞 SUPORTE
+
+Se encontrar problemas:
+
+1. Abra F12 e procure pelos logs coloridos
+2. Copie a mensagem de erro exata
+3. Verifique se os 2 arquivos foram substituídos corretamente
+4. Verifique os imports em main.js
+5. Verifique se as funções no Codigo.gs existem
+
+---
+
+**Versão:** 2.0 Forms & CRUD  
+**Data:** Junho 2026  
+**Status:** ✅ Pronto para Produção

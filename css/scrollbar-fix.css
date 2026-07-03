@@ -1,0 +1,152 @@
+/* ============ REMOVE SCROLLBARS - Firefox, Chrome, Safari ============ */
+
+/* Regra global: esconde scrollbar em QUALQUER elemento (cobre containers
+   internos como o wrapper dos cards de gráfico do dashboard, que causava
+   o scroll horizontal visível), mantendo o conteúdo rolável normalmente. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* Remover scrollbar do body */
+body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+}
+
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* Remover scrollbar da sidebar */
+.sidebar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+#view {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+}
+
+#view::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* Remover scrollbar do main content */
+main,
+.main-content,
+[role="main"] {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+}
+
+main::-webkit-scrollbar,
+.main-content::-webkit-scrollbar,
+[role="main"]::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* ============ AJUSTES LAYOUT ============ */
+
+/* Dashboard cards - evitar overflow */
+.dashboard-card,
+.dashboard-grid {
+  overflow: hidden;
+  word-wrap: break-word;
+}
+
+/* Tabelas - evitar scroll horizontal */
+table {
+  table-layout: fixed;
+}
+
+table th,
+table td {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Forms - ajustar altura */
+form,
+.form-container {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+form::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============ MOBILE (<=640px) ============ */
+@media (max-width: 640px) {
+  /* Sidebar mobile - sem scroll visível */
+  .sidebar {
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  /* Conteúdo principal - ajustar padding */
+  .shell {
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .shell::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ============ DESKTOP (>640px) ============ */
+@media (min-width: 641px) {
+  /* Sidebar desktop - altura fixa sem scroll */
+  .sidebar {
+    height: 100vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Main content - altura fixa */
+  .shell,
+  main {
+    height: calc(100vh - var(--header-height, 0px));
+    overflow: hidden;
+  }
+
+  /* Pages com conteúdo - permitir scroll interno */
+  .page-container,
+  .dashboard,
+  .appointments,
+  .blocked,
+  .settings {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+  }
+
+  .page-container::-webkit-scrollbar,
+  .dashboard::-webkit-scrollbar,
+  .appointments::-webkit-scrollbar,
+  .blocked::-webkit-scrollbar,
+  .settings::-webkit-scrollbar {
+    display: none;
+  }
+}
